@@ -226,16 +226,17 @@ class C51(OffPolicyAlgorithm):
             replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
 
             with th.no_grad():
-                # Compute the next categorical probabilities using the target network
-                next_probabilities = th.softmax(self.categorical_net_target(replay_data.next_observations), dim=-1)
+                # Compute the next categorical probabilities
+                probabilities_next = th.softmax(self.categorical_net(replay_data.next_observations), dim=-1)
+                probabilities_next_target = th.softmax(self.categorical_net_target(replay_data.next_observations), dim=-1)
                 # Compute the greedy actions which maximize the next Q values
-                next_actions = (next_probabilities * self.support).mean(dim=-1).argmax(dim=-1)
+                actions_next = (probabilities_next * self.support).mean(dim=-1).argmax(dim=-1)
                 # Follow greedy policy: use the one with the highest Q values
-                next_probabilities = next_probabilities[th.arange(self.batch_size), next_actions]
+                probabilities_next_target = probabilities_next_target[th.arange(self.batch_size), actions_next]
                 # 1-step TD target
-                target_support = replay_data.rewards + (1 - replay_data.dones) * self.gamma * self.support
+                supports_next_target = replay_data.rewards + (1 - replay_data.dones) * self.gamma * self.support
                 # Project
-                targets = project(target_support, next_probabilities, self.support)
+                targets = project(supports_next_target, probabilities_next_target, self.support)
 
             # Get current estimated categorical logits
             logits = self.categorical_net(replay_data.observations)
